@@ -68,6 +68,9 @@ async function captureFrames(page, prefix, count, intervalMs) {
   page.on('console', msg => {
     if (msg.type() === 'error') console.error('  ❌ console:', msg.text());
   });
+  page.on('pageerror', err => {
+    console.error('  ❌ page error:', err.message);
+  });
   page.on('requestfailed', req => {
     // ignore fonts / CDN 404s that don't affect functionality
     if (!req.url().includes('fonts.googleapis')) {
@@ -83,7 +86,13 @@ async function captureFrames(page, prefix, count, intervalMs) {
   await page.click('#watch-btn');
   console.log('👁   Clicked "Observe only"');
 
-  // Wait for canvas + socket to initialise
+  // Wait for main screen to appear (hidden attr removed)
+  await page.waitForSelector('#main-screen:not([hidden])', { timeout: 8000 });
+
+  // Wait for socket + test hook to initialise
+  await page.waitForFunction(() => typeof window.__socketOnState === 'function', { timeout: 8000 });
+
+  // Wait for p5 canvas to be created
   await page.waitForSelector('#canvas-container canvas', { timeout: 8000 });
   await page.waitForTimeout(1000);
 

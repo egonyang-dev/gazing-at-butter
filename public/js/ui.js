@@ -21,11 +21,11 @@ const STATE_LABELS = {
 };
 
 const RECOMMENDATIONS = {
-  SOLID:    'Butter condition is stable. Collective observation is working as intended.',
-  MELTING:  'Sustained attention is recommended. A shared viewing experience ensures stability.',
-  BROWNING: 'Observation below recommended threshold. Thermal degradation in progress.',
-  BURNING:  'Participation is critically insufficient. Immediate collective observation required.',
-  BURNT:    'Condition is irreversible. The butter has burned. Thank you for your participation.',
+  SOLID:    'Butter condition is stable. Collective observation is functioning as intended.',
+  MELTING:  'Gaze ratio is declining. Sustained collective attention is required to reverse thermal progression.',
+  BROWNING: 'Observer threshold not met. Thermal degradation is in progress.',
+  BURNING:  'Observer count is critically insufficient. Irreversible damage is imminent.',
+  BURNT:    'Condition is irreversible. Session data will not be retained.',
 };
 
 export function updateUI(worldState) {
