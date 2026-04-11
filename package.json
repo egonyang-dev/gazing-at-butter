@@ -1,0 +1,18 @@
+{
+  "name": "gazing-at-butter",
+  "version": "1.0.0",
+  "description": "注視奶油 — 集體注視互動藝術裝置",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev":   "node --watch server/index.js",
+    "test":  "node scripts/watch-butter.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "socket.io": "^4.7.2"
+  },
+  "devDependencies": {
+    "playwright": "^1.59.1"
+  }
+}

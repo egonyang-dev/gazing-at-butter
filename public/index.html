@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Gazing at Butter</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Entry screen -->
+  <div id="entry-screen">
+    <div class="entry-content">
+      <div class="brand-mark">Gazing at Butter</div>
+      <p class="tagline">Maintain optimal butter condition through collective observation.</p>
+      <div class="entry-actions">
+        <button id="enter-btn">Participate</button>
+        <button id="watch-btn" class="secondary-btn">Observe only</button>
+      </div>
+      <p class="fine-print">
+        Camera access is required for active participation.<br>
+        Your image is processed locally and is not stored or transmitted.
+      </p>
+    </div>
+  </div>
+
+  <!-- Main screen -->
+  <div id="main-screen" hidden>
+    <header id="site-header">
+      <div class="header-brand">Gazing at Butter</div>
+      <div class="header-indicator">
+        <span class="indicator-dot" id="conn-dot"></span>
+        <span id="conn-label">Connecting</span>
+      </div>
+    </header>
+
+    <div id="layout">
+
+      <!-- Left: canvas viewer -->
+      <section id="viewer-section">
+        <div id="canvas-container"></div>
+        <video id="webcam" autoplay muted playsinline></video>
+      </section>
+
+      <!-- Right: status panel -->
+      <aside id="status-panel">
+
+        <div class="panel-group">
+          <div class="panel-label">Butter status</div>
+          <div class="panel-value" id="state-label">—</div>
+        </div>
+
+        <div class="panel-divider"></div>
+
+        <div class="panel-group">
+          <div class="panel-label">Session activity</div>
+          <div class="metric-row">
+            <span class="metric-name">Participants</span>
+            <span class="metric-value" id="total-counter">—</span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-name">Currently observing</span>
+            <span class="metric-value" id="gaze-counter">—</span>
+          </div>
+        </div>
+
+        <div class="panel-divider"></div>
+
+        <div class="panel-group">
+          <div class="panel-label">Thermal condition</div>
+          <div class="heat-track">
+            <div class="heat-fill" id="heat-bar"></div>
+          </div>
+          <div class="heat-readout">
+            <span id="heat-value">—</span><span class="heat-unit"> / 100</span>
+          </div>
+        </div>
+
+        <div class="panel-divider"></div>
+
+        <div class="panel-group">
+          <div class="panel-label">Recommendation</div>
+          <div class="recommendation-text" id="recommendation">—</div>
+        </div>
+
+        <div class="panel-divider"></div>
+
+        <div class="product-description">
+          <p>A shared viewing experience ensures stability. The butter responds to collective attention.</p>
+          <p>Reduced observation leads to thermal instability and irreversible browning.</p>
+          <p>Current session data is not retained after disconnection.</p>
+        </div>
+
+      </aside>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-core@4.15.0/dist/tf-core.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgl@4.15.0/dist/tf-backend-webgl.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/face-landmarks-detection@1.0.5/dist/face-landmarks-detection.min.js"></script>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
