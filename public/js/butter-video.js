@@ -1,154 +1,124 @@
 /**
- * Gazing at Butter — real-video renderer (skeleton)
+ * Gazing at Butter — real-video renderer
  *
  * Drop-in replacement for butter.js.
  * Same export: initButterSketch(containerEl) → cleanup handle
  *
- * To activate: in main.js change
- *   import { initButterSketch } from './butter.js';
- * to
- *   import { initButterSketch } from './butter-video.js';
+ * ─── CONCEPT ─────────────────────────────────────────────────────────────────
+ *   The video always plays forward. It never jumps, never rewinds.
+ *   Collective observation does not reverse the melting — it only slows it.
+ *   More viewers → slower playback rate → the same real event, dilated in time.
+ *
+ *   Playback speed is driven by gazeCount from the server.
+ *   butterHeat and butterState are still shown in the status panel (unchanged)
+ *   but do not affect video position.
+ *
+ * ─── SPEED MAPPING ───────────────────────────────────────────────────────────
+ *   Viewers  Rate    Real sec / video sec   Burns in (248s of footage)
+ *   ───────────────────────────────────────────────────────────────────
+ *   0        1.000×       1s               ~4 min
+ *   1        0.500×       2s               ~8 min
+ *   2        0.250×       4s               ~16 min
+ *   3        0.100×      10s               ~41 min
+ *   4        0.030×      33s               ~2.3 hours
+ *   5+       0.010×     100s               ~7 hours
+ *
+ * ─── BURNT ENDING ────────────────────────────────────────────────────────────
+ *   Video stops advancing when currentTime reaches BURNT_HOLD_SECS.
+ *   It holds on that single frame permanently — irreversible, intentional.
+ *   The last ~32s of footage (248→279s) are never touched; end-of-file on a
+ *   paused video looks like a playback error, so we stay clear of it.
+ *   If the hold frame looks wrong, adjust BURNT_HOLD_SECS to a nearby value
+ *   and reload — scrub your footage to ~4:08 to verify the frame is calm.
+ *
+ * ─── WHY NOT playbackRate ────────────────────────────────────────────────────
+ *   Chrome floors playbackRate at 0.0625× (1/16). Rates for 3+ viewers would
+ *   be silently clamped. Instead the video is always paused; each RAF tick
+ *   advances currentTime by (elapsed × rate). Rewind-proof, rate-accurate,
+ *   works at all speeds including 1.0×.
  *
  * ─── VIDEO FILE ──────────────────────────────────────────────────────────────
- *   Place your video at:  public/assets/video/butter.mp4
- *   Keep a WebM fallback: public/assets/video/butter.webm
- *
- *   Recommended format:
- *     Container : MP4 (H.264, AAC — muted is fine)
- *     Resolution: 1080 × 1920  (9:16 portrait)
- *     Frame rate: 30 fps (24 fps also works)
- *     Bitrate   : 8–12 Mbps for good quality on web
- *     Duration  : aim for 60–120 seconds total (see heat mapping below)
- *     Audio     : not required — the video is always muted
- *
- *   Quick export from iPhone / Mac:
- *     - Keep original .mov, then convert with ffmpeg:
- *         ffmpeg -i butter.mov -vf "scale=1080:1920" -c:v libx264 -crf 22
- *                -preset slow -an -movflags +faststart butter.mp4
- *     - WebM fallback:
- *         ffmpeg -i butter.mov -vf "scale=1080:1920" -c:v libvpx-vp9
- *                -crf 30 -b:v 0 -an butter.webm
- *
- * ─── HEAT → TIMESTAMP MAPPING ────────────────────────────────────────────────
- *   The video is a single continuous take of butter going from cold to burnt.
- *   We never let it play — we seek to a position based on the current heat.
- *
- *   Record the footage in these phases (adjust VIDEO_HEAT_MAP below to match):
- *
- *     Phase          Heat   Suggested video time  What to show
- *     ─────────────────────────────────────────────────────────
- *     SOLID          0–15   0:00 – 0:15           Cold butter block, pan lukewarm
- *     MELTING       15–35   0:15 – 0:40           Edges softening, first pool
- *     BROWNING      35–60   0:40 – 1:10           Pool spreading, colour shift
- *     BURNING       60–85   1:10 – 1:45           Smoke, strong browning/sizzle
- *     BURNT         85–100  1:45 – 2:00           Black char, minimal movement
- *
- *   VIDEO_HEAT_MAP maps heat (0–100) to video seconds.
- *   Edit these timestamps after you've recorded and reviewed the footage.
- *
- * ─── FRAMING ─────────────────────────────────────────────────────────────────
- *   The canvas container in the current UI is square.
- *   A 9:16 portrait video will be fitted with object-fit: cover so the
- *   centre crop fills the square (pillarboxing avoided, some top/bottom cropped).
- *   Frame the butter in the vertical centre of the shot so the crop looks good.
+ *   Primary:  public/assets/video/butter.mp4
+ *   Fallback: public/assets/video/butter.webm  (optional)
  *
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
 import { worldState } from './socket.js';
 
-// ── Heat → video timestamp control points ────────────────────────────────────
-// Format: [heat, seconds]  — must be monotonically increasing on both axes.
-// Edit the seconds column after reviewing your recorded footage.
-const VIDEO_HEAT_MAP = [
-  [  0,   0 ],   // heat   0 → 0:00  (start — solid, cold)
-  [ 15,  15 ],   // heat  15 → 0:15  (MELTING begins)
-  [ 35,  40 ],   // heat  35 → 0:40  (BROWNING begins)
-  [ 60,  70 ],   // heat  60 → 1:10  (BURNING begins)
-  [ 85, 105 ],   // heat  85 → 1:45  (BURNT begins)
-  [100, 120 ],   // heat 100 → 2:00  (end of footage)
+// ── Playback speed per viewer count ──────────────────────────────────────────
+// Index = gazeCount clamped to [0, 5].
+// Rate = video-seconds advanced per real-second of wall time.
+const GAZE_RATES = [
+  1.000,  // 0 viewers — normal speed
+  0.500,  // 1 viewer  — half speed
+  0.250,  // 2 viewers — quarter speed
+  0.100,  // 3 viewers — very slow
+  0.030,  // 4 viewers — extremely slow
+  0.010,  // 5+ viewers — ~1 frame every 3.3s at 30 fps
 ];
 
-// ── Interpolate heat (0–100) to a video timestamp (seconds) ─────────────────
-function heatToSeconds(heat) {
-  const clamped = Math.max(0, Math.min(100, heat));
-  for (let i = 1; i < VIDEO_HEAT_MAP.length; i++) {
-    const [h0, t0] = VIDEO_HEAT_MAP[i - 1];
-    const [h1, t1] = VIDEO_HEAT_MAP[i];
-    if (clamped <= h1) {
-      const ratio = (clamped - h0) / (h1 - h0);
-      return t0 + ratio * (t1 - t0);
-    }
-  }
-  return VIDEO_HEAT_MAP[VIDEO_HEAT_MAP.length - 1][1];
+// ── Burnt hold ────────────────────────────────────────────────────────────────
+// Once currentTime reaches this, advancing stops permanently.
+// Adjust to a visually stable frame inside the burnt section (~4:08).
+const BURNT_HOLD_SECS = 248;
+
+// ── Rate lookup ───────────────────────────────────────────────────────────────
+function getRate() {
+  const count = Math.min(worldState.gazeCount ?? 0, GAZE_RATES.length - 1);
+  return GAZE_RATES[count];
 }
 
 // ── Public init — same signature as butter.js ─────────────────────────────────
 export function initButterSketch(containerEl) {
+
   // ── Video element ──────────────────────────────────────────────────────────
   const video = document.createElement('video');
   video.setAttribute('playsinline', '');
   video.setAttribute('muted', '');
-  video.preload    = 'auto';
-  video.loop       = false;   // we seek manually — no auto-play
+  video.preload = 'auto';
   video.style.cssText = [
     'width: 100%',
     'height: 100%',
-    'object-fit: cover',      // centre-crop portrait video into square container
+    'object-fit: cover',    // centre-crop portrait video into square container
+    'object-position: center 40%',  // shift visible area up ~2cm
     'display: block',
-    'background: #1a0e04',    // dark fallback while video loads
+    'background: #1a0e04',  // dark fallback while video loads
   ].join(';');
 
-  // MP4 + WebM sources — browser picks what it can decode
-  const srcMp4  = document.createElement('source');
-  srcMp4.src    = 'assets/video/butter.mp4';
-  srcMp4.type   = 'video/mp4';
+  // MP4 primary + WebM fallback — browser picks what it can decode
+  const srcMp4 = document.createElement('source');
+  srcMp4.src   = '/assets/video/butter.mp4';  // absolute — works from any route
+  srcMp4.type  = 'video/mp4';
   const srcWebM = document.createElement('source');
-  srcWebM.src   = 'assets/video/butter.webm';
-  srcWebM.type  = 'video/webm';
+  srcWebM.src  = '/assets/video/butter.webm';
+  srcWebM.type = 'video/webm';
   video.appendChild(srcMp4);
   video.appendChild(srcWebM);
 
   // ── Canvas overlay for post-process effects ────────────────────────────────
-  // Preserves: vignette, film grain, exposure flicker from the original butter.js
-  const canvas  = document.createElement('canvas');
+  const canvas = document.createElement('canvas');
   canvas.style.cssText = [
     'position: absolute',
     'inset: 0',
     'width: 100%',
     'height: 100%',
-    'pointer-events: none',   // pass clicks through to controls beneath
+    'pointer-events: none',
   ].join(';');
   const ctx = canvas.getContext('2d');
 
-  // Container needs relative positioning so the canvas overlays correctly
   const prevPosition = containerEl.style.position;
   containerEl.style.position = 'relative';
   containerEl.appendChild(video);
   containerEl.appendChild(canvas);
 
-  // ── State ──────────────────────────────────────────────────────────────────
-  let displayHeat  = 0;       // smoothly interpolated toward worldState.butterHeat
-  let focusT       = Math.random() * 1000; // noise cursor for exposure flicker
-  let animId       = null;
+  // ── Playback state ─────────────────────────────────────────────────────────
+  let lastTimestamp = null;   // DOMHighResTimeStamp from previous RAF tick
+  let animId        = null;
+  let focusT        = Math.random() * 1000;  // noise cursor for exposure flicker
+  let burnt         = false;  // latched true once hold frame is reached
 
-  // ── Heat seeking ───────────────────────────────────────────────────────────
-  // Seeks the video when the interpolated heat moves by more than a threshold.
-  // We do NOT call video.play() — seeking a paused video renders a single frame.
-  let lastSeekedHeat = -999;
-  const SEEK_THRESHOLD = 0.25; // heat units — lower = smoother, higher = cheaper
-
-  function maybeSeek() {
-    if (!video.readyState) return; // video not loaded yet
-    if (Math.abs(displayHeat - lastSeekedHeat) < SEEK_THRESHOLD) return;
-    lastSeekedHeat = displayHeat;
-    const t = heatToSeconds(displayHeat);
-    if (Math.abs(video.currentTime - t) > 0.05) {
-      video.currentTime = t;
-    }
-  }
-
-  // ── Post-process canvas effects ────────────────────────────────────────────
+  // ── Post-process overlay ───────────────────────────────────────────────────
   function drawOverlay() {
     const w = containerEl.offsetWidth;
     const h = containerEl.offsetHeight;
@@ -157,13 +127,6 @@ export function initButterSketch(containerEl) {
       canvas.height = h;
     }
     ctx.clearRect(0, 0, w, h);
-
-    // Vignette
-    const vig = ctx.createRadialGradient(w / 2, h / 2, h * 0.25, w / 2, h / 2, h * 0.75);
-    vig.addColorStop(0, 'rgba(0,0,0,0)');
-    vig.addColorStop(1, 'rgba(0,0,0,0.38)');
-    ctx.fillStyle = vig;
-    ctx.fillRect(0, 0, w, h);
 
     // Film grain — ~0.25% of pixels
     const grainCount = Math.floor(w * h * 0.0025);
@@ -177,40 +140,60 @@ export function initButterSketch(containerEl) {
 
     // Exposure flicker — subtle brightness pulse
     focusT += 0.003;
-    // Simple 1D noise approximation using sin (no p5.js available here)
-    const noise = (Math.sin(focusT * 7.3) + Math.sin(focusT * 3.7)) / 2; // −1 to 1
-    const flickerAlpha = noise * 0.02; // ±0.02 opacity
-    if (flickerAlpha > 0) {
-      ctx.fillStyle = `rgba(255,255,255,${flickerAlpha})`;
-    } else {
-      ctx.fillStyle = `rgba(0,0,0,${-flickerAlpha})`;
-    }
+    const noise = (Math.sin(focusT * 7.3) + Math.sin(focusT * 3.7)) / 2;
+    const flickerAlpha = noise * 0.02;
+    ctx.fillStyle = flickerAlpha > 0
+      ? `rgba(255,255,255,${flickerAlpha})`
+      : `rgba(0,0,0,${-flickerAlpha})`;
     ctx.fillRect(0, 0, w, h);
   }
 
   // ── Animation loop ─────────────────────────────────────────────────────────
-  function tick() {
-    const targetHeat = worldState.butterHeat ?? 0;
-    // Same lerp factor as butter.js (0.04) — keeps visual feel identical
-    displayHeat += (targetHeat - displayHeat) * 0.04;
-
-    maybeSeek();
-    drawOverlay();
-
+  function tick(timestamp) {
     animId = requestAnimationFrame(tick);
+
+    // Compute real elapsed time since last frame (cap at 200ms to survive
+    // tab-switch or display sleep without a time-jump on resume)
+    if (lastTimestamp === null) {
+      lastTimestamp = timestamp;
+      drawOverlay();
+      return;
+    }
+    const elapsed = Math.min((timestamp - lastTimestamp) / 1000, 0.2);
+    lastTimestamp = timestamp;
+
+    // Advance video — only if loaded and not yet burnt
+    if (!burnt && video.readyState >= 2) {
+      const rate    = getRate();
+      const nextTime = video.currentTime + elapsed * rate;
+
+      if (nextTime >= BURNT_HOLD_SECS) {
+        // Arrived at the hold frame — lock permanently
+        video.currentTime = BURNT_HOLD_SECS;
+        burnt = true;
+      } else {
+        video.currentTime = nextTime;
+      }
+    }
+
+    drawOverlay();
   }
 
-  // Start loop once video metadata is available (so .duration is known)
+  // ── Start ──────────────────────────────────────────────────────────────────
+  // Video stays paused throughout — currentTime is advanced manually above.
   video.addEventListener('loadedmetadata', () => {
-    tick();
+    video.currentTime = 0;
+    animId = requestAnimationFrame(tick);
   }, { once: true });
 
-  // Fallback: start loop after 3s even if video hasn't loaded
-  // (overlay effects still run; video shows placeholder background)
-  const fallbackTimer = setTimeout(tick, 3000);
+  // Fallback: begin loop after 3s even if video fails to load
+  // (overlay effects run; video shows the #1a0e04 background)
+  const fallbackTimer = setTimeout(() => {
+    if (!animId) animId = requestAnimationFrame(tick);
+  }, 3000);
   video.addEventListener('loadedmetadata', () => clearTimeout(fallbackTimer), { once: true });
 
-  // ── Cleanup handle (mirrors butter.js return convention) ───────────────────
+  // ── Cleanup ────────────────────────────────────────────────────────────────
   return {
     remove() {
       if (animId) cancelAnimationFrame(animId);
