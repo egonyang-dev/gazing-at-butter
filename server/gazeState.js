@@ -4,10 +4,23 @@
  */
 
 const TICK_MS = 500;
-const THRESHOLD = 0.6;   // 需要 60% 以上的人注視才能降溫
-const HEAT_RATE = 2.5;   // 無人注視時每 tick 升溫
-const COOL_RATE = 1.5;   // 注視時每 tick 降溫
-const MIN_USERS = 1;     // 錄影 demo 時設為 1；正式部署改為 2
+
+// Heat delta per tick (500ms), indexed by number of active gazers.
+// Positive = heating, negative = cooling.
+// Index 5 applies to 5 or more gazers.
+const GAZE_HEAT_DELTA = [
+   2.5,  // 0 gazers — rapid burning
+   1.0,  // 1 gazer  — slow degradation
+   0.3,  // 2 gazers — slight degradation
+  -0.3,  // 3 gazers — mostly stable
+  -1.0,  // 4 gazers — slight cooling
+  -2.0,  // 5+ gazers — fully stable
+];
+
+function netHeatDelta(gazingCount) {
+  const idx = Math.min(gazingCount, GAZE_HEAT_DELTA.length - 1);
+  return GAZE_HEAT_DELTA[idx];
+}
 
 const STATES = {
   SOLID:    { min: 0,  max: 15,  label: '固態',  labelEn: 'solid' },
@@ -65,14 +78,8 @@ class GazeState {
     if (total === 0) return;
 
     const gazing = [...this.users.values()].filter(Boolean).length;
-    const gazeRatio = gazing / total;
-    const hasEnoughUsers = total >= MIN_USERS;
-
-    if (hasEnoughUsers && gazeRatio >= THRESHOLD) {
-      this.heat = Math.max(0, this.heat - COOL_RATE);
-    } else {
-      this.heat = Math.min(100, this.heat + HEAT_RATE);
-    }
+    const delta  = netHeatDelta(gazing);
+    this.heat    = Math.max(0, Math.min(100, this.heat + delta));
 
     const state = deriveState(this.heat);
 
