@@ -81,7 +81,7 @@ export function initButterSketch(containerEl) {
     'width: 100%',
     'height: 100%',
     'object-fit: cover',    // centre-crop portrait video into square container
-    'object-position: center 40%',  // shift visible area up ~2cm
+    'object-position: center 45%',  // shift visible area up ~1cm
     'display: block',
     'background: #1a0e04',  // dark fallback while video loads
   ].join(';');
@@ -115,7 +115,6 @@ export function initButterSketch(containerEl) {
   // ── Playback state ─────────────────────────────────────────────────────────
   let lastTimestamp = null;   // DOMHighResTimeStamp from previous RAF tick
   let animId        = null;
-  let focusT        = Math.random() * 1000;  // noise cursor for exposure flicker
   let burnt         = false;  // latched true once hold frame is reached
 
   // ── Post-process overlay ───────────────────────────────────────────────────
@@ -138,14 +137,6 @@ export function initButterSketch(containerEl) {
       ctx.fillRect(gx, gy, 1, 1);
     }
 
-    // Exposure flicker — subtle brightness pulse
-    focusT += 0.003;
-    const noise = (Math.sin(focusT * 7.3) + Math.sin(focusT * 3.7)) / 2;
-    const flickerAlpha = noise * 0.02;
-    ctx.fillStyle = flickerAlpha > 0
-      ? `rgba(255,255,255,${flickerAlpha})`
-      : `rgba(0,0,0,${-flickerAlpha})`;
-    ctx.fillRect(0, 0, w, h);
   }
 
   // ── Animation loop ─────────────────────────────────────────────────────────
