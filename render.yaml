@@ -1,0 +1,8 @@
+services:
+  - type: web
+    name: gazing-at-butter
+    env: node
+    plan: free
+    buildCommand: npm install --omit=dev
+    startCommand: node server/index.js
+    healthCheckPath: /
