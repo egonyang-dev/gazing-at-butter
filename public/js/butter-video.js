@@ -81,7 +81,7 @@ export function initButterSketch(containerEl) {
     'width: 100%',
     'height: 100%',
     'object-fit: cover',    // centre-crop portrait video into square container
-    'object-position: center 45%',  // shift visible area up ~1cm
+    'object-position: center 65%',  // show lower portion of video to center butter
     'display: block',
     'background: #1a0e04',  // dark fallback while video loads
   ].join(';');
