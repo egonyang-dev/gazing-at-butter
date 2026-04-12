@@ -46,6 +46,10 @@
 
 import { worldState } from './socket.js';
 
+// ── Video source ─────────────────────────────────────────────────────────────
+// Replace this URL with your externally hosted MP4 before deploying.
+const VIDEO_URL = 'REPLACE_WITH_VIDEO_URL';
+
 // ── Playback speed per viewer count ──────────────────────────────────────────
 // Index = gazeCount clamped to [0, 5].
 // Rate = video-seconds advanced per real-second of wall time.
@@ -86,15 +90,11 @@ export function initButterSketch(containerEl) {
     'background: #1a0e04',  // dark fallback while video loads
   ].join(';');
 
-  // MP4 primary + WebM fallback — browser picks what it can decode
+  // MP4 source — loaded from VIDEO_URL defined at the top of this file
   const srcMp4 = document.createElement('source');
-  srcMp4.src   = '/assets/video/butter.mp4';  // absolute — works from any route
-  srcMp4.type  = 'video/mp4';
-  const srcWebM = document.createElement('source');
-  srcWebM.src  = '/assets/video/butter.webm';
-  srcWebM.type = 'video/webm';
+  srcMp4.src  = VIDEO_URL;
+  srcMp4.type = 'video/mp4';
   video.appendChild(srcMp4);
-  video.appendChild(srcWebM);
 
   // ── Canvas overlay for post-process effects ────────────────────────────────
   const canvas = document.createElement('canvas');
