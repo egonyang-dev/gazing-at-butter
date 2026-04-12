@@ -171,17 +171,27 @@ export function initButterSketch(containerEl) {
   }
 
   // ── Start ──────────────────────────────────────────────────────────────────
-  // Video stays paused throughout — currentTime is advanced manually above.
+  // Mobile browsers (iOS/Android) won't buffer video data until play() is
+  // called. We call play() once to unlock the element, immediately pause,
+  // then hand control to the RAF loop which advances currentTime manually.
   video.addEventListener('loadedmetadata', () => {
     video.currentTime = 0;
-    animId = requestAnimationFrame(tick);
+    video.play()
+      .then(() => {
+        video.pause();
+        video.currentTime = 0;
+      })
+      .catch(() => { /* autoplay blocked — RAF loop still runs */ })
+      .finally(() => {
+        if (!animId) animId = requestAnimationFrame(tick);
+      });
   }, { once: true });
 
-  // Fallback: begin loop after 3s even if video fails to load
+  // Fallback: begin loop after 5s even if video fails to load
   // (overlay effects run; video shows the #1a0e04 background)
   const fallbackTimer = setTimeout(() => {
     if (!animId) animId = requestAnimationFrame(tick);
-  }, 3000);
+  }, 5000);
   video.addEventListener('loadedmetadata', () => clearTimeout(fallbackTimer), { once: true });
 
   // ── Cleanup ────────────────────────────────────────────────────────────────
