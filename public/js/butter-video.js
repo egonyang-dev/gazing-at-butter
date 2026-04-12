@@ -48,7 +48,7 @@ import { worldState } from './socket.js';
 
 // ── Video source ─────────────────────────────────────────────────────────────
 // Replace this URL with your externally hosted MP4 before deploying.
-const VIDEO_URL = 'REPLACE_WITH_VIDEO_URL';
+const VIDEO_URL = 'https://pub-9308623c7716408e8149d9d4a0c001d4.r2.dev/butter.mp4';
 
 // ── Playback speed per viewer count ──────────────────────────────────────────
 // Index = gazeCount clamped to [0, 5].
