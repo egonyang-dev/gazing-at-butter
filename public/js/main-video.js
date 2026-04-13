@@ -64,12 +64,9 @@ function showMainScreen() {
 }
 
 function connectSocket() {
-  initSocket((state) => {
-    updateUI(state);
-    // Video version detects BURNT via onBurnt callback in butter-video.js;
-    // this covers the edge case where the server state arrives first.
-    if (state.butterState === 'BURNT') triggerEnding();
-  });
+  // Ending is triggered via onBurnt callback in butter-video.js (fires at
+  // heat 100 when the video locks). Server heat and video heat are independent.
+  initSocket((state) => updateUI(state));
 }
 
 // ——— Participate (with camera) ———

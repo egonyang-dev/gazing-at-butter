@@ -63,7 +63,7 @@ function showMainScreen() {
 function connectSocket() {
   initSocket((state) => {
     updateUI(state);
-    if (state.butterState === 'BURNT') triggerEnding();
+    if (state.butterHeat >= 100) triggerEnding();
   });
 }
 
