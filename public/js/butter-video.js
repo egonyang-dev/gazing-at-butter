@@ -10,8 +10,8 @@
  *   More viewers → slower playback rate → the same real event, dilated in time.
  *
  *   Playback speed is driven by gazeCount from the server.
- *   butterHeat and butterState are still shown in the status panel (unchanged)
- *   but do not affect video position.
+ *   The 0–100 counter and butter state are derived locally from video progress,
+ *   not from the server's heat simulation. Server heat is ignored here.
  *
  * ─── SPEED MAPPING ───────────────────────────────────────────────────────────
  *   Viewers  Rate    Real sec / video sec   Burns in (248s of footage)
@@ -45,6 +45,7 @@
  */
 
 import { worldState } from './socket.js';
+import { updateUI }   from './ui.js';
 
 // ── Video source ─────────────────────────────────────────────────────────────
 // Replace this URL with your externally hosted MP4 before deploying.
@@ -71,6 +72,20 @@ const BURNT_HOLD_SECS = 248;
 function getRate() {
   const count = Math.min(worldState.gazeCount ?? 0, GAZE_RATES.length - 1);
   return GAZE_RATES[count];
+}
+
+// ── Heat + state from video position ─────────────────────────────────────────
+// Heat 0–100 maps linearly to 0–BURNT_HOLD_SECS.
+// State thresholds mirror the server-side STATES in gazeState.js.
+function deriveHeatState(currentTime) {
+  const heat = Math.min((currentTime / BURNT_HOLD_SECS) * 100, 100);
+  let state;
+  if      (heat < 15) state = 'SOLID';
+  else if (heat < 35) state = 'MELTING';
+  else if (heat < 60) state = 'BROWNING';
+  else if (heat < 85) state = 'BURNING';
+  else                state = 'BURNT';
+  return { heat: Math.round(heat * 10) / 10, state };
 }
 
 // ── Public init — same signature as butter.js ─────────────────────────────────
@@ -155,17 +170,22 @@ export function initButterSketch(containerEl) {
 
     // Advance video — only if loaded and not yet burnt
     if (!burnt && video.readyState >= 2) {
-      const rate    = getRate();
+      const rate     = getRate();
       const nextTime = video.currentTime + elapsed * rate;
 
       if (nextTime >= BURNT_HOLD_SECS) {
-        // Arrived at the hold frame — lock permanently
         video.currentTime = BURNT_HOLD_SECS;
         burnt = true;
       } else {
         video.currentTime = nextTime;
       }
     }
+
+    // Derive heat and state from video position; push to UI
+    const { heat, state } = deriveHeatState(video.currentTime);
+    worldState.butterHeat  = heat;
+    worldState.butterState = state;
+    updateUI(worldState);
 
     drawOverlay();
   }
