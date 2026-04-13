@@ -45,6 +45,15 @@ export function initSocket(onStateUpdate) {
   };
 }
 
+export function disconnectSocket() {
+  clearInterval(keepalive);
+  lastGazing = null;
+  if (socket) {
+    socket.disconnect();
+    socket = null;
+  }
+}
+
 export function sendGaze(isGazing) {
   if (!socket) return;
   if (isGazing === lastGazing) return;

@@ -3,10 +3,11 @@
  * Coordinates: entry flow, camera, socket, canvas, UI
  */
 
-import { initSocket } from './socket.js';
-import { startGazeDetection } from './gaze.js';
+import { initSocket, disconnectSocket } from './socket.js';
+import { startGazeDetection, stopGazeDetection } from './gaze.js';
 import { initButterSketch } from './butter.js';
 import { updateUI } from './ui.js';
+import { startEndingSequence, resetEndingOverlay } from './ending.js';
 
 const entryScreen = document.getElementById('entry-screen');
 const mainScreen  = document.getElementById('main-screen');
@@ -14,8 +15,44 @@ const enterBtn    = document.getElementById('enter-btn');
 const watchBtn    = document.getElementById('watch-btn');
 const webcamEl    = document.getElementById('webcam');
 const container   = document.getElementById('canvas-container');
+const overlayEl   = document.getElementById('ending-overlay');
 
-let butterSketch = null;
+const ENDING_HOLD_MS = 60_000;
+
+let butterSketch  = null;
+let endingStarted = false;
+
+function triggerEnding() {
+  if (endingStarted) return;
+  endingStarted = true;
+
+  stopGazeDetection();
+  disconnectSocket();
+
+  setTimeout(() => {
+    startEndingSequence(overlayEl, returnToEntry);
+  }, ENDING_HOLD_MS);
+}
+
+function returnToEntry() {
+  resetEndingOverlay(overlayEl);
+
+  if (butterSketch) { butterSketch.remove(); butterSketch = null; }
+
+  // Stop camera stream
+  if (webcamEl.srcObject) {
+    webcamEl.srcObject.getTracks().forEach(t => t.stop());
+    webcamEl.srcObject = null;
+  }
+  webcamEl.hidden = false;
+
+  mainScreen.hidden  = true;
+  entryScreen.hidden = false;
+
+  enterBtn.disabled    = false;
+  enterBtn.textContent = 'Participate';
+  endingStarted = false;
+}
 
 function showMainScreen() {
   entryScreen.hidden = true;
@@ -24,7 +61,10 @@ function showMainScreen() {
 }
 
 function connectSocket() {
-  initSocket((state) => updateUI(state));
+  initSocket((state) => {
+    updateUI(state);
+    if (state.butterState === 'BURNT') triggerEnding();
+  });
 }
 
 // ——— Participate (with camera) ———
@@ -53,6 +93,6 @@ watchBtn.addEventListener('click', observeMode);
 
 function observeMode() {
   webcamEl.hidden = true;
-  connectSocket();      // socket connected, gaze stays false (server default)
+  connectSocket();
   showMainScreen();
 }
