@@ -89,7 +89,7 @@ function deriveHeatState(currentTime) {
 }
 
 // ── Public init — same signature as butter.js ─────────────────────────────────
-export function initButterSketch(containerEl) {
+export function initButterSketch(containerEl, { onBurnt } = {}) {
 
   // ── Video element ──────────────────────────────────────────────────────────
   const video = document.createElement('video');
@@ -176,6 +176,7 @@ export function initButterSketch(containerEl) {
       if (nextTime >= BURNT_HOLD_SECS) {
         video.currentTime = BURNT_HOLD_SECS;
         burnt = true;
+        onBurnt?.();
       } else {
         video.currentTime = nextTime;
       }
